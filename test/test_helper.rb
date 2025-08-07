@@ -4,6 +4,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
 ENV["RAILS_ENV"] = "test"
 
+require "logger"
 require "active_record"
 require "active_record/fixtures"
 require "active_support/test_case"
@@ -19,11 +20,11 @@ if Warning.respond_to?("[]=") && ENV["ACTIVE_RECORD_VERSION"] && ENV["ACTIVE_REC
   Warning[:deprecated] = false
 end
 
-adapter = ENV.fetch("DATABASE_ADAPTER", "sqlite3")
+adapter = "postgresql"
 db_config = YAML.safe_load(ERB.new(File.read("test/database.yml")).result)[adapter]
 
 ActiveRecord::Base.configurations = { "test" => db_config } # Key must be string for older AR versions
-ActiveRecord::Tasks::DatabaseTasks.create(db_config) if %w[postgresql mysql].include?(adapter)
+ActiveRecord::Tasks::DatabaseTasks.create(db_config) if %w[postgresql].include?(adapter)
 ActiveRecord::Base.establish_connection(:test)
 
 ActiveSupport.on_load(:active_support_test_case) do
