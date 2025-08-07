@@ -3,5 +3,5 @@ postgresql:
   encoding: unicode
   database: activerecord_cte_test
   username: <%= ENV.fetch("POSTGRES_USER", "postgres") %>
-  password: <%= ENV["POSTGRES_PASSWORD"] %>
+  password: <%= ENV.fetch("POSTGRES_PASSWORD", "postgres") %>
   host: <%= ENV.fetch("POSTGRES_HOST", "postgres") %>
