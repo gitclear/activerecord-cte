@@ -1,13 +1,10 @@
-FROM ruby:3.1
+FROM ruby:3.2
 
 ENV APP_HOME /activerecord_cte
 RUN mkdir $APP_HOME
 WORKDIR $APP_HOME
 
 ENV RAILS_ENV test
-ENV INSTALL_MYSQL_GEM true
-ENV INSTALL_PG_GEM true
-ENV MYSQL_HOST mysql
 
 # Cache the bundle install
 COPY Gemfile* $APP_HOME/

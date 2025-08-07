@@ -15,9 +15,6 @@ class Activerecord::CteTest < ActiveSupport::TestCase
   end
 
   def test_with_when_string_is_passed_as_an_argument
-    # Guard can be removed when new version that includes https://github.com/rails/rails/pull/42563 is released and configured in test matrix
-    return if ActiveRecord.version == Gem::Version.create("6.1.7.2")
-
     popular_posts = Post.where("views_count > 100")
     popular_posts_from_cte = Post.with("popular_posts AS (SELECT * FROM posts WHERE views_count > 100)").from("popular_posts AS posts")
     assert popular_posts.any?
@@ -241,5 +238,158 @@ class Activerecord::CteTest < ActiveSupport::TestCase
   def test_delete_all_works_as_expected
     Post.with(most_popular: Post.where("views_count >= 100")).delete_all
     assert_equal 0, Post.count
+  end
+
+  def test_string_cte_with_quoted_table_names
+    # Test with backticks
+    popular_posts = Post.where("views_count > 100")
+    popular_posts_from_cte = Post.with("`popular_posts` AS (SELECT * FROM posts WHERE views_count > 100)").from("popular_posts AS posts")
+    assert popular_posts.any?
+    assert_equal popular_posts.to_a, popular_posts_from_cte
+
+    # Test with double quotes
+    popular_posts_from_cte2 = Post.with('"popular_posts" AS (SELECT * FROM posts WHERE views_count > 100)').from("popular_posts AS posts")
+    assert_equal popular_posts.to_a, popular_posts_from_cte2
+  end
+
+  def test_string_cte_with_complex_sql_and_nested_parentheses
+    # Test with nested parentheses and complex SQL
+    complex_cte = "complex_posts AS (SELECT * FROM posts WHERE views_count > (SELECT AVG(views_count) FROM posts) AND language IN ('en', 'de'))"
+    posts_from_complex_cte = Post.with(complex_cte).from("complex_posts AS posts")
+
+    # Should execute without errors
+    assert_nothing_raised { posts_from_complex_cte.load }
+  end
+
+  def test_string_cte_case_insensitive_as_keyword
+    # Test case variations of AS keyword
+    popular_posts = Post.where("views_count > 100")
+
+    # lowercase 'as'
+    popular_posts_from_cte1 = Post.with("popular_posts as (SELECT * FROM posts WHERE views_count > 100)").from("popular_posts AS posts")
+    assert_equal popular_posts.to_a, popular_posts_from_cte1
+
+    # mixed case 'As'
+    popular_posts_from_cte2 = Post.with("popular_posts As (SELECT * FROM posts WHERE views_count > 100)").from("popular_posts AS posts")
+    assert_equal popular_posts.to_a, popular_posts_from_cte2
+
+    # uppercase 'AS'
+    popular_posts_from_cte3 = Post.with("popular_posts AS (SELECT * FROM posts WHERE views_count > 100)").from("popular_posts AS posts")
+    assert_equal popular_posts.to_a, popular_posts_from_cte3
+  end
+
+  def test_string_cte_with_whitespace_variations
+    popular_posts = Post.where("views_count > 100")
+
+    # Extra whitespace
+    cte_with_spaces = "   popular_posts   AS   (   SELECT * FROM posts WHERE views_count > 100   )   "
+    popular_posts_from_cte = Post.with(cte_with_spaces).from("popular_posts AS posts")
+    assert_equal popular_posts.to_a, popular_posts_from_cte
+  end
+
+  def test_string_cte_error_handling
+    # Test invalid formats
+    assert_raise(ArgumentError, "Should reject CTE without AS keyword") do
+      Post.with("popular_posts (SELECT * FROM posts)").load
+    end
+
+    assert_raise(ArgumentError, "Should reject CTE without parentheses") do
+      Post.with("popular_posts AS SELECT * FROM posts").load
+    end
+
+    assert_raise(ArgumentError, "Should reject CTE with unbalanced parentheses") do
+      Post.with("popular_posts AS (SELECT * FROM posts WHERE views_count > (100").load
+    end
+
+    assert_raise(ArgumentError, "Should reject CTE with unbalanced parentheses") do
+      Post.with("popular_posts AS (SELECT * FROM posts WHERE views_count > 100))").load
+    end
+
+    assert_raise(ArgumentError, "Should reject CTE with empty table name") do
+      Post.with(" AS (SELECT * FROM posts)").load
+    end
+
+    assert_raise(ArgumentError, "Should reject CTE with empty expression") do
+      Post.with("popular_posts AS ()").load
+    end
+
+    assert_raise(ArgumentError, "Should reject CTE with whitespace-only expression") do
+      Post.with("popular_posts AS (   )").load
+    end
+  end
+
+  def test_string_cte_with_underscores_and_numbers
+    # Test table names with underscores and numbers
+    cte_string = "popular_posts_2023 AS (SELECT * FROM posts WHERE views_count > 100)"
+    popular_posts_from_cte = Post.with(cte_string).from("popular_posts_2023 AS posts")
+
+    popular_posts = Post.where("views_count > 100")
+    assert_equal popular_posts.to_a, popular_posts_from_cte
+  end
+
+  def test_string_cte_with_multiline_expressions
+    # Test multiline CTE expressions with complex formatting
+    multiline_cte = <<~SQL.strip
+      filtered_tracker_issue_extras AS (
+        SELECT tie.scheduled_in_external_sprint_ids,
+              tie.tracker_project_issue_id
+        FROM tracker_issue_extras tie
+        JOIN repo_issues ri
+          ON ri.tracker_project_issue_id = tie.tracker_project_issue_id
+        WHERE ri.primary_committer_id = ANY(ARRAY[1]::bigint[])
+          AND ri.repo_id               = ANY(ARRAY[2, 3, 1]::bigint[])
+      )
+    SQL
+
+    # This should parse successfully without raising an error
+    assert_nothing_raised do
+      Post.with(multiline_cte).to_sql
+    end
+
+    # Test with newlines in different positions
+    cte_with_newlines = "popular_posts AS (\n  SELECT *\n  FROM posts\n  WHERE views_count > 100\n)"
+    assert_nothing_raised do
+      Post.with(cte_with_newlines).to_sql
+    end
+
+    # Test with complex nested subqueries and multiline formatting
+    complex_multiline_cte = <<~SQL.strip
+      complex_analysis AS (
+        SELECT
+          p.id,
+          p.title,
+          (SELECT COUNT(*)
+           FROM comments c
+           WHERE c.post_id = p.id
+             AND c.created_at > '2023-01-01') as recent_comments,
+          CASE
+            WHEN p.views_count > 1000 THEN 'popular'
+            WHEN p.views_count > 100 THEN 'moderate'
+            ELSE 'low'
+          END as popularity
+        FROM posts p
+        WHERE p.published_at IS NOT NULL
+      )
+    SQL
+
+    assert_nothing_raised do
+      Post.with(complex_multiline_cte).to_sql
+    end
+  end
+
+  def test_string_cte_with_user_provided_multiline_example
+    # Test the specific multiline example provided by the user
+    user_multiline_cte = "filtered_tracker_issue_extras AS (\n  SELECT tie.scheduled_in_external_sprint_ids,\n        tie.tracker_project_issue_id\n  FROM tracker_issue_extras tie\n  JOIN repo_issues ri\n    ON ri.tracker_project_issue_id = tie.tracker_project_issue_id\n  WHERE ri.primary_committer_id = ANY(ARRAY[[1]]::bigint[])\n    AND ri.repo_id               = ANY(ARRAY[[2, 3, 1]]::bigint[])\n)\n"
+
+    # This should parse successfully without raising an error
+    result = Post.with(user_multiline_cte).to_sql
+
+    # The table name gets quoted by PostgreSQL, so check for quoted version
+    assert result.include?("WITH \"filtered_tracker_issue_extras\" AS"), "Should include WITH clause with user's table name (quoted)"
+    assert result.include?("tie.scheduled_in_external_sprint_ids"), "Should include specific column from user's example"
+    assert result.include?("tracker_issue_extras tie"), "Should include table alias from user's example"
+    assert result.include?("JOIN repo_issues ri"), "Should include JOIN clause from user's example"
+    assert result.include?("ARRAY[[1]]::bigint[]"), "Should preserve complex array syntax"
+    assert result.include?("ARRAY[[2, 3, 1]]::bigint[]"), "Should preserve complex array with multiple values"
   end
 end

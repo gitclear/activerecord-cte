@@ -94,6 +94,32 @@ Post.with("posts_with_tags AS (SELECT * FROM posts WHERE tags_count > 0)")
 # SELECT * FROM posts
 ```
 
+#### Enhanced String CTE Parsing
+
+This gem includes robust string CTE parsing that handles various table name formats and provides detailed error messages. It supports:
+
+- **Quoted table names**: `` `table_name` ``, `"table_name"`
+- **Unquoted table names**: `table_name`, `user_posts`, `table_2023`
+- **Case-insensitive AS keyword**: `AS`, `as`, `As`
+- **Complex SQL expressions**: Nested parentheses, subqueries, etc.
+- **Comprehensive validation**: Balanced parentheses, empty components, malformed syntax
+
+```ruby
+# All of these work:
+Post.with("`quoted_table` AS (SELECT * FROM posts)")
+Post.with('"double_quoted" AS (SELECT * FROM posts)')
+Post.with("users_with_posts AS (SELECT * FROM posts WHERE id IN (SELECT post_id FROM comments))")
+Post.with("popular_posts as (SELECT * FROM posts WHERE views > 1000)") # lowercase 'as'
+```
+
+If there's a syntax error, you'll get helpful error messages:
+- `"CTE string cannot be empty"`
+- `"CTE string must contain 'AS' keyword. Expected 'table_name AS (SELECT ...)' but got: ..."`
+- `"CTE expression must be enclosed in parentheses. Expected 'table_name AS (SELECT ...)' but got: ..."`
+- `"Unbalanced parentheses in CTE expression: ..."`
+
+This parsing capability provides a workaround for Rails 6.1+ where string CTE support was broken (see [Rails PR #42563](https://github.com/rails/rails/pull/42563) which was rejected). The implementation is fully documented in `lib/activerecord/cte/string_cte_parser.rb`.
+
 ### Arel Nodes
 
 If you already have `Arel::Node::As` node you can just pass it as is
@@ -214,6 +240,9 @@ bundle exec rubocop
 To run the tests using SQLite adapter and latest version on Rails run
 
 ```
+POSTGRES_USER={your_pg_user} \
+POSTGRES_PASSWORD={your_pg_password} \
+POSTGRES_HOST=localhost \
 bundle exec rake test
 ```
 

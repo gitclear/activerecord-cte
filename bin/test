@@ -4,8 +4,8 @@
 require "English"
 require "yaml"
 
-active_record_versions = %w[6.1.7.2 6.0.6]
-database_adapters = %w[mysql postgresql sqlite3]
+active_record_versions = %w[6.1.7.9]
+database_adapters = %w[postgresql]
 
 class Matrix
   def initialize(active_record_versions, database_adapters)
