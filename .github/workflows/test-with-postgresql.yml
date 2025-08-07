@@ -1,5 +1,5 @@
 name: PostgreSQL
-on: [pull_request]
+on: [push]
 jobs:
   Test-With-PostgreSQL:
     runs-on: ubuntu-latest

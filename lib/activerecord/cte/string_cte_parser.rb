@@ -68,7 +68,7 @@ module Activerecord
       # Examples that DON'T match:
       #   users (no backticks)
       #   `users (missing closing backtick)
-      BACKTICK_QUOTED_TABLE = /`([^`]+)`/
+      BACKTICK_QUOTED_TABLE = /`([^`]+)`/.freeze
 
       # Matches table names enclosed in double quotes: "table_name"
       # Examples that MATCH:
@@ -78,7 +78,7 @@ module Activerecord
       # Examples that DON'T match:
       #   users (no quotes)
       #   "users (missing closing quote)
-      DOUBLE_QUOTED_TABLE = /"([^"]+)"/
+      DOUBLE_QUOTED_TABLE = /"([^"]+)"/.freeze
 
       # Matches unquoted table names: must start with letter/underscore, can contain letters/numbers/underscores
       # Examples that MATCH:
@@ -92,7 +92,7 @@ module Activerecord
       #   user-posts (contains hyphen)
       #   user.posts (contains dot)
       #   "users" (has quotes - handled by other patterns)
-      UNQUOTED_TABLE = /([a-zA-Z_][a-zA-Z0-9_]*)/
+      UNQUOTED_TABLE = /([a-zA-Z_][a-zA-Z0-9_]*)/.freeze
 
       # Combines all table name patterns with non-capturing group
       # Examples that MATCH:
@@ -100,7 +100,7 @@ module Activerecord
       #   "user_posts" → captures "user_posts" from quote group
       #   popular_posts → captures "popular_posts" from unquoted group
       # Note: Only one capture group will have a value, the others will be nil
-      TABLE_NAME_PATTERN = /(?:#{BACKTICK_QUOTED_TABLE}|#{DOUBLE_QUOTED_TABLE}|#{UNQUOTED_TABLE})/
+      TABLE_NAME_PATTERN = /(?:#{BACKTICK_QUOTED_TABLE}|#{DOUBLE_QUOTED_TABLE}|#{UNQUOTED_TABLE})/.freeze
 
       # Matches the AS keyword (case insensitive)
       # Examples that MATCH:
@@ -108,7 +108,7 @@ module Activerecord
       # Examples that DON'T match:
       #   A S (space in between)
       #   ASS (too many letters)
-      AS_KEYWORD = /AS/i
+      AS_KEYWORD = /AS/i.freeze
 
       # Matches the SQL expression inside parentheses (greedy match for everything inside)
       # Examples that MATCH:
@@ -119,7 +119,7 @@ module Activerecord
       #   SELECT * FROM posts (no parentheses)
       #   (SELECT * FROM posts (missing closing paren)
       #   SELECT * FROM posts) (missing opening paren)
-      EXPRESSION_PATTERN = /\((.+)\)/
+      EXPRESSION_PATTERN = /\((.+)\)/.freeze
 
       # Complete CTE string pattern: optional whitespace + table_name + whitespace + AS + whitespace + (expression) + optional whitespace
       # Examples that MATCH:
@@ -132,7 +132,7 @@ module Activerecord
       #   "popular_posts AS SELECT * FROM posts" (missing parentheses)
       #   "AS (SELECT * FROM posts)" (missing table name)
       #   "123_table AS (SELECT * FROM posts)" (invalid table name)
-      CTE_STRING_PATTERN = /\A\s*#{TABLE_NAME_PATTERN}\s+#{AS_KEYWORD}\s+#{EXPRESSION_PATTERN}\s*\z/i
+      CTE_STRING_PATTERN = /\A\s*#{TABLE_NAME_PATTERN}\s+#{AS_KEYWORD}\s+#{EXPRESSION_PATTERN}\s*\z/i.freeze
 
       # ---------------------------------------------------------------------------
       # Main parsing method that converts a CTE string into an Arel::Nodes::As node
@@ -146,9 +146,11 @@ module Activerecord
           if string.strip.empty?
             raise ArgumentError, "CTE string cannot be empty"
           elsif !string.match(/\sAS\s/i)
-            raise ArgumentError, "CTE string must contain 'AS' keyword. Expected 'table_name AS (SELECT ...)' but got: #{string}"
-          elsif !string.include?('(') || !string.include?(')')
-            raise ArgumentError, "CTE expression must be enclosed in parentheses. Expected 'table_name AS (SELECT ...)' but got: #{string}"
+            raise ArgumentError,
+                  "CTE string must contain 'AS' keyword. Expected 'table_name AS (SELECT ...)' but got: #{string}"
+          elsif !string.include?("(") || !string.include?(")")
+            raise ArgumentError,
+                  "CTE expression must be enclosed in parentheses. Expected 'table_name AS (SELECT ...)' but got: #{string}"
           else
             raise ArgumentError, "Invalid CTE string format. Expected 'table_name AS (SELECT ...)' but got: #{string}"
           end
@@ -174,13 +176,9 @@ module Activerecord
       # ---------------------------------------------------------------------------
       # Validates that the extracted CTE components are not empty or whitespace-only
       def self.validate_cte_components(table_name, expression)
-        if table_name.nil? || table_name.strip.empty?
-          raise ArgumentError, "Empty table name in CTE string"
-        end
+        raise ArgumentError, "Empty table name in CTE string" if table_name.nil? || table_name.strip.empty?
 
-        if expression.nil? || expression.strip.empty?
-          raise ArgumentError, "Empty expression in CTE string"
-        end
+        raise ArgumentError, "Empty expression in CTE string" if expression.nil? || expression.strip.empty?
       end
 
       # ---------------------------------------------------------------------------
@@ -191,18 +189,16 @@ module Activerecord
         paren_count = 0
         expression.each_char do |char|
           case char
-          when '('
+          when "("
             paren_count += 1
-          when ')'
+          when ")"
             paren_count -= 1
             # If we have more closing than opening parens, fail immediately
-            break if paren_count < 0
+            break if paren_count.negative?
           end
         end
 
-        unless paren_count == 0
-          raise ArgumentError, "Unbalanced parentheses in CTE expression: #{expression}"
-        end
+        raise ArgumentError, "Unbalanced parentheses in CTE expression: #{expression}" unless paren_count.zero?
       end
     end
   end
