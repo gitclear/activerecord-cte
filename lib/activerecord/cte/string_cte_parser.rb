@@ -110,29 +110,33 @@ module Activerecord
       #   ASS (too many letters)
       AS_KEYWORD = /AS/i.freeze
 
-      # Matches the SQL expression inside parentheses (greedy match for everything inside)
+      # Matches the SQL expression inside parentheses (greedy match for everything inside, including newlines)
+      # Using [\s\S] to match any character including newlines (equivalent to . with DOTALL flag)
       # Examples that MATCH:
       #   (SELECT * FROM posts) → captures "SELECT * FROM posts"
       #   (SELECT id, name FROM users WHERE active = true) → captures "SELECT id, name FROM users WHERE active = true"
       #   (SELECT * FROM posts WHERE views > (SELECT AVG(views) FROM posts)) → captures "SELECT * FROM posts WHERE views > (SELECT AVG(views) FROM posts)"
+      #   (SELECT *\n  FROM posts\n  WHERE views > 100) → captures "SELECT *\n  FROM posts\n  WHERE views > 100"
       # Examples that DON'T match:
       #   SELECT * FROM posts (no parentheses)
       #   (SELECT * FROM posts (missing closing paren)
       #   SELECT * FROM posts) (missing opening paren)
-      EXPRESSION_PATTERN = /\((.+)\)/.freeze
+      EXPRESSION_PATTERN = /\(([\s\S]+)\)/.freeze
 
       # Complete CTE string pattern: optional whitespace + table_name + whitespace + AS + whitespace + (expression) + optional whitespace
+      # Uses multiline mode to handle strings with newlines
       # Examples that MATCH:
       #   "popular_posts AS (SELECT * FROM posts WHERE views_count > 100)"
       #   "  `user stats`   AS   (SELECT COUNT(*) FROM users)  "
       #   '"complex_table" as (SELECT * FROM posts)'
       #   "table_2023 AS (SELECT id FROM posts WHERE created_at > '2023-01-01')"
+      #   "multiline_cte AS (\n  SELECT *\n  FROM posts\n  WHERE active = true\n)"
       # Examples that DON'T match:
       #   "popular_posts (SELECT * FROM posts)" (missing AS)
       #   "popular_posts AS SELECT * FROM posts" (missing parentheses)
       #   "AS (SELECT * FROM posts)" (missing table name)
       #   "123_table AS (SELECT * FROM posts)" (invalid table name)
-      CTE_STRING_PATTERN = /\A\s*#{TABLE_NAME_PATTERN}\s+#{AS_KEYWORD}\s+#{EXPRESSION_PATTERN}\s*\z/i.freeze
+      CTE_STRING_PATTERN = /\A\s*#{TABLE_NAME_PATTERN}\s+#{AS_KEYWORD}\s+#{EXPRESSION_PATTERN}\s*\z/im.freeze
 
       # ---------------------------------------------------------------------------
       # Main parsing method that converts a CTE string into an Arel::Nodes::As node
